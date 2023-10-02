@@ -16,15 +16,6 @@ namespace DogIsland_TEX_Unpacker
                 Console.WriteLine("TEX Extractor for The DOG Island");
 
                 string input = "";
-                while (!string.Equals(input, "wii", StringComparison.CurrentCultureIgnoreCase) && !string.Equals(input, "ps2", StringComparison.CurrentCultureIgnoreCase))
-                {
-                    Console.WriteLine("Which version are you extracting files from?   \"wii\" / \"ps2\"");
-                    input = Console.ReadLine();
-                }
-                if (string.Equals(input, "ps2", StringComparison.CurrentCultureIgnoreCase))
-                    LittleEndian = true;
-
-                input = "";
                 while (!string.Equals(input, "y", StringComparison.CurrentCultureIgnoreCase) && !string.Equals(input, "n", StringComparison.CurrentCultureIgnoreCase))
                 {
                     Console.WriteLine("Would you like to extract ALL .tex files?   Y / N");
@@ -65,22 +56,28 @@ namespace DogIsland_TEX_Unpacker
 
         public static void Extract(string path)
         {
-            string pacName = Path.GetFileNameWithoutExtension(path);
+            string texName = Path.GetFileNameWithoutExtension(path);
             string inDirPath = Path.GetDirectoryName(path);
-            string outDirPath = Path.Combine(inDirPath, pacName + "tex");
+            string outDirPath = Path.Combine(inDirPath, texName + "tex");
             if (!Directory.Exists(outDirPath)) Directory.CreateDirectory(outDirPath);
 
             var f = File.OpenRead(path);
-            int pacFileCount = DataRead.ToInt32(ReadBytes(f, new byte[4]), 0);
+            f.Seek(0xC, SeekOrigin.Begin);
+            byte[] endianCheck = ReadBytes(f, new byte[4]);
+            if (Enumerable.SequenceEqual(endianCheck, new byte[] { 0x0, 0x0, 0x0, 0x10 })) LittleEndian = false;
+            else if (Enumerable.SequenceEqual(endianCheck, new byte[] { 0x10, 0x0, 0x0, 0x0 })) LittleEndian = true;
+            else throw new Exception();
+            f.Seek(0, SeekOrigin.Begin);
+            int texFileCount = DataRead.ToInt32(ReadBytes(f, new byte[4]), 0);
 
-            for (int i = 0; i < pacFileCount; i++)
+            for (int i = 0; i < texFileCount; i++)
             {
                 f.Seek(0x10 + 0x20 * i, SeekOrigin.Begin);
                 string fileName = ReadString(ReadBytes(f, new byte[0x10]), 0);
                 string fileExt = ReadString(ReadBytes(f, new byte[0x4]), 0);
                 uint fileSize = DataRead.ToUInt32(ReadBytes(f, new byte[4]), 0);
                 uint fileOffset = DataRead.ToUInt32(ReadBytes(f, new byte[4]), 0);
-
+                if (fileName == "" || fileSize == 0) continue;
                 f.Seek(fileOffset, SeekOrigin.Begin);
                 var outFile = File.Create(Path.Combine(outDirPath, fileName + "." + fileExt));
                 outFile.Write(ReadBytes(f, new byte[fileSize]), 0, (int)fileSize);
